@@ -25,7 +25,8 @@ export const MOCK_CLIENTS: Client[] = [
     paymentStatus: PaymentStatus.PAID,
     responsible: 'Ana Silva',
     email: 'financeiro@techsolutions.com',
-    contractStart: '2023-01-10'
+    contractStart: '2023-01-10',
+    cnpj: '12.345.678/0001-90'
   },
   {
     id: '2',
@@ -38,7 +39,8 @@ export const MOCK_CLIENTS: Client[] = [
     paymentStatus: PaymentStatus.LATE,
     responsible: 'Carlos Souza',
     email: 'contato@saborearte.com',
-    contractStart: '2024-02-01'
+    contractStart: '2024-02-01',
+    cnpj: '98.765.432/0001-21'
   },
   {
     id: '3',
@@ -51,7 +53,8 @@ export const MOCK_CLIENTS: Client[] = [
     paymentStatus: PaymentStatus.PENDING,
     responsible: 'Ana Silva',
     email: 'adm@mendes.adv.br',
-    contractStart: '2025-01-01'
+    contractStart: '2025-01-01',
+    cnpj: '11.222.333/0001-44'
   },
   {
     id: '4',
@@ -64,7 +67,8 @@ export const MOCK_CLIENTS: Client[] = [
     paymentStatus: PaymentStatus.NEGOTIATING,
     responsible: 'Roberto Lima',
     email: 'financeiro@build.com.br',
-    contractStart: '2022-05-10'
+    contractStart: '2022-05-10',
+    cnpj: '55.444.333/0001-11'
   },
   {
     id: '5',
@@ -77,7 +81,8 @@ export const MOCK_CLIENTS: Client[] = [
     paymentStatus: PaymentStatus.PAID,
     responsible: 'Carlos Souza',
     email: 'founders@startupz.com',
-    contractStart: '2024-06-01'
+    contractStart: '2024-06-01',
+    cnpj: '00.111.222/0001-33'
   }
 ];
 

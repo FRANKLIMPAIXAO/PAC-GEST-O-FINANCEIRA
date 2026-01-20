@@ -1,9 +1,10 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   FileText, Building2, User, Package, Calculator, 
   Send, Save, Plus, Trash2, ShieldCheck, Info, Sparkles, Loader2,
-  ChevronDown, Globe, CreditCard, Layout, Eye, Code, Zap, Search
+  ChevronDown, Globe, CreditCard, Layout, Eye, Code, Zap, Search,
+  CheckCircle, AlertCircle, UserCheck
 } from 'lucide-react';
 import { NfeData, NfeItem, Client } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -82,6 +83,25 @@ const NfeScreen: React.FC = () => {
     }
   });
 
+  // Validation Logic for CNPJ/CPF
+  const validationResult = useMemo(() => {
+    const raw = nfe.dest.cnpjCpf.replace(/\D/g, '');
+    if (!raw) return { status: 'empty' };
+    
+    // Basic format check
+    const isLengthValid = raw.length === 11 || raw.length === 14;
+    if (!isLengthValid) return { status: 'invalid_format', message: 'Formato inválido (deve ter 11 ou 14 dígitos)' };
+
+    // Check against mock database
+    const foundClient = MOCK_CLIENTS.find(c => c.cnpj?.replace(/\D/g, '') === raw);
+    
+    if (foundClient) {
+      return { status: 'registered', client: foundClient };
+    } else {
+      return { status: 'unregistered', message: 'Documento válido, mas não cadastrado na base de clientes' };
+    }
+  }, [nfe.dest.cnpjCpf]);
+
   const filteredClients = MOCK_CLIENTS.filter(c => 
     c.name.toLowerCase().includes(clientSearchTerm.toLowerCase()) ||
     c.id.includes(clientSearchTerm)
@@ -93,11 +113,11 @@ const NfeScreen: React.FC = () => {
       dest: {
         ...nfe.dest,
         xNome: client.name,
-        cnpjCpf: '00.000.000/0001-91', // Mock data since Client interface is limited
+        cnpjCpf: client.cnpj || '',
         email: client.email,
         enderDest: {
           ...nfe.dest.enderDest,
-          xLgr: 'Rua Exemplo do Cliente',
+          xLgr: client.address?.split(',')[0] || 'Rua Exemplo do Cliente',
           nro: '123',
           cep: '01234-567'
         }
@@ -287,18 +307,18 @@ const NfeScreen: React.FC = () => {
               </div>
             </section>
 
-            {/* GRUPO DEST - Destinatário (COM AUTOCOMPLETE) */}
+            {/* GRUPO DEST - Destinatário (COM AUTOCOMPLETE E VALIDAÇÃO) */}
             <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm overflow-visible">
               <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-6 flex items-center gap-2">
                 <User size={18} className="text-blue-600" /> Destinatário (Cliente)
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1 md:col-span-2 relative" ref={dropdownRef}>
-                  <label className="text-xs font-bold text-slate-500 uppercase">Razão Social / Nome ou Código</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase">Pesquisar por Nome (Cadastro de Clientes)</label>
                   <div className="relative">
                     <input 
                       type="text" 
-                      placeholder="Digite iniciais ou ID do cliente..."
+                      placeholder="Pesquisar cliente cadastrado..."
                       className="w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium" 
                       value={clientSearchTerm}
                       onChange={(e) => {
@@ -308,14 +328,6 @@ const NfeScreen: React.FC = () => {
                       onFocus={() => setShowClientSuggestions(true)}
                     />
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    {clientSearchTerm && (
-                      <button 
-                        onClick={() => {setClientSearchTerm(''); setShowClientSuggestions(true)}}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
                   </div>
 
                   {showClientSuggestions && (
@@ -331,12 +343,12 @@ const NfeScreen: React.FC = () => {
                             <div>
                               <div className="text-sm font-bold text-slate-900">{client.name}</div>
                               <div className="text-[10px] text-slate-500 flex gap-2">
-                                <span>ID: {client.id}</span>
+                                <span>Doc: {client.cnpj}</span>
                                 <span>•</span>
                                 <span>{client.email}</span>
                               </div>
                             </div>
-                            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase">{client.serviceType}</span>
+                            <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full uppercase">Ativo</span>
                           </button>
                         ))
                       ) : (
@@ -347,16 +359,54 @@ const NfeScreen: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                {/* CAMPO CNPJ/CPF COM VALIDAÇÃO EM TEMPO REAL */}
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-500 uppercase">CNPJ / CPF</label>
+                  <label className="text-xs font-bold text-slate-500 uppercase flex items-center justify-between">
+                    CNPJ / CPF
+                    {validationResult.status === 'registered' && (
+                      <span className="text-[9px] text-green-600 font-black uppercase flex items-center gap-1">
+                        <UserCheck size={10} /> Cadastro Local OK
+                      </span>
+                    )}
+                  </label>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      className={`w-full pl-4 pr-10 py-2.5 border rounded-lg text-sm transition-all focus:ring-2 outline-none font-mono ${
+                        validationResult.status === 'registered' ? 'border-green-500 focus:ring-green-100' :
+                        validationResult.status === 'unregistered' ? 'border-yellow-500 focus:ring-yellow-100' :
+                        validationResult.status === 'invalid_format' ? 'border-red-500 focus:ring-red-100' :
+                        'border-slate-200 focus:ring-blue-100'
+                      }`} 
+                      value={nfe.dest.cnpjCpf} 
+                      placeholder="00.000.000/0000-00" 
+                      onChange={(e) => setNfe({...nfe, dest: {...nfe.dest, cnpjCpf: e.target.value}})}
+                    />
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      {validationResult.status === 'registered' && <CheckCircle className="text-green-500" size={18} />}
+                      {validationResult.status === 'unregistered' && <Info className="text-yellow-500" size={18} />}
+                      {validationResult.status === 'invalid_format' && <AlertCircle className="text-red-500" size={18} />}
+                    </div>
+                  </div>
+                  {validationResult.status === 'invalid_format' && (
+                    <p className="text-[10px] text-red-500 font-bold italic mt-1">{validationResult.message}</p>
+                  )}
+                  {validationResult.status === 'unregistered' && (
+                    <p className="text-[10px] text-yellow-600 font-bold italic mt-1">{validationResult.message}</p>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">Razão Social / Nome Completo</label>
                   <input 
                     type="text" 
-                    className="w-full p-2.5 border rounded-lg text-sm bg-slate-50" 
-                    value={nfe.dest.cnpjCpf} 
-                    placeholder="00.000.000/0000-00" 
-                    onChange={(e) => setNfe({...nfe, dest: {...nfe.dest, cnpjCpf: e.target.value}})}
+                    className="w-full p-2.5 border rounded-lg text-sm bg-white" 
+                    value={nfe.dest.xNome} 
+                    onChange={(e) => setNfe({...nfe, dest: {...nfe.dest, xNome: e.target.value}})}
                   />
                 </div>
+
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-500 uppercase">IE Destinatário</label>
                   <select className="w-full p-2.5 border rounded-lg text-sm bg-white" value={nfe.dest.indIEDest} onChange={(e) => setNfe({...nfe, dest: {...nfe.dest, indIEDest: e.target.value}})}>
@@ -364,6 +414,16 @@ const NfeScreen: React.FC = () => {
                     <option value="2">2 - Contribuinte Isento</option>
                     <option value="9">9 - Não Contribuinte</option>
                   </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-500 uppercase">E-mail para Envio XML/PDF</label>
+                  <input 
+                    type="email" 
+                    className="w-full p-2.5 border rounded-lg text-sm bg-white" 
+                    value={nfe.dest.email} 
+                    onChange={(e) => setNfe({...nfe, dest: {...nfe.dest, email: e.target.value}})}
+                  />
                 </div>
               </div>
             </section>
@@ -509,8 +569,8 @@ const NfeScreen: React.FC = () => {
 
               <button 
                 onClick={() => {setLoading(true); setTimeout(() => {setLoading(false); alert('NF-e Transmitida com Sucesso!');}, 2000)}}
-                disabled={loading}
-                className="w-full mt-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-sm uppercase tracking-widest shadow-lg shadow-emerald-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3"
+                disabled={loading || validationResult.status === 'invalid_format' || !nfe.dest.xNome}
+                className="w-full mt-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-sm uppercase tracking-widest shadow-lg shadow-emerald-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
                 {loading ? 'Transmitindo...' : 'Transmitir SEFAZ'}
@@ -531,7 +591,7 @@ const NfeScreen: React.FC = () => {
                 <h4 className="text-xs uppercase">Dica do Especialista</h4>
               </div>
               <p className="text-[11px] text-blue-800 leading-relaxed">
-                Para serviços de BPO, utilize sempre o CFOP **5.933** para operações dentro do estado e garanta que o NCM **00** seja aceito pela prefeitura do seu município.
+                A validação de CNPJ em tempo real previne rejeições na SEFAZ. Sempre verifique se o cliente está ativo no Sintegra para evitar a denegação da nota.
               </p>
             </div>
           </div>

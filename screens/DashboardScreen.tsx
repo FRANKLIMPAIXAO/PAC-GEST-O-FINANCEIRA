@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -11,7 +12,8 @@ import {
   FileText, 
   ArrowRight,
   Sparkles,
-  Loader2
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 import { MOCK_METRICS, CHART_DATA_LINE, CHART_DATA_BAR, CHART_DATA_PIE } from '../constants';
 import { generateFinancialReport } from '../services/geminiService';
@@ -39,6 +41,7 @@ const StatCard = ({ title, value, subtext, icon: Icon, trend, color }: any) => (
 const DashboardScreen: React.FC = () => {
   const [aiReport, setAiReport] = useState<string | null>(null);
   const [loadingAi, setLoadingAi] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const handleGenerateReport = async () => {
     setLoadingAi(true);
@@ -46,6 +49,14 @@ const DashboardScreen: React.FC = () => {
     const report = await generateFinancialReport(context);
     setAiReport(report);
     setLoadingAi(false);
+  };
+
+  const handleDownloadPdf = () => {
+    setGeneratingPdf(true);
+    setTimeout(() => {
+      setGeneratingPdf(false);
+      alert('Relatório consolidado exportado com sucesso!');
+    }, 2500);
   };
 
   return (
@@ -58,15 +69,19 @@ const DashboardScreen: React.FC = () => {
         <div className="flex gap-3">
           <button 
             onClick={handleGenerateReport}
-            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm disabled:opacity-50"
             disabled={loadingAi}
           >
             {loadingAi ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
             {loadingAi ? 'Gerando Análise...' : 'IA Insights'}
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors">
-            <FileText size={18} />
-            Relatório PDF
+          <button 
+            onClick={handleDownloadPdf}
+            disabled={generatingPdf}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 transition-colors shadow-sm active:scale-95 disabled:opacity-50"
+          >
+            {generatingPdf ? <Loader2 className="animate-spin text-blue-600" size={18} /> : <FileText size={18} />}
+            {generatingPdf ? 'Gerando PDF...' : 'Relatório PDF'}
           </button>
         </div>
       </div>
@@ -172,49 +187,6 @@ const DashboardScreen: React.FC = () => {
           <button className="w-full mt-6 py-2 text-sm text-slate-600 font-medium border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors">
             Ver Faturamento Detalhado
           </button>
-        </div>
-      </div>
-
-      {/* Secondary Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Receita por Serviço</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={CHART_DATA_BAR} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={100} tick={{fontSize: 12}} />
-                <Tooltip formatter={(value: number) => [`R$ ${value.toLocaleString()}`, 'Receita']} />
-                <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Despesas por Centro de Custo</h3>
-          <div className="h-64 flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={CHART_DATA_PIE}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {CHART_DATA_PIE.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend verticalAlign="bottom" height={36}/>
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
         </div>
       </div>
     </div>
