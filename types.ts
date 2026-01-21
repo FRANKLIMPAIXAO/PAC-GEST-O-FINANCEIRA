@@ -43,6 +43,19 @@ export enum CostCenter {
   COMMERCIAL = 'Comercial'
 }
 
+export interface InventoryItem {
+  id: string;
+  sku: string;
+  name: string;
+  quantity: number;
+  minQuantity: number;
+  unit: string;
+  averageCost: number;
+  lastPurchasePrice: number;
+  ncm?: string;
+  category: string;
+}
+
 export interface Client {
   id: string;
   name: string;
@@ -58,24 +71,7 @@ export interface Client {
   cnpj?: string;
   address?: string;
   whatsapp?: string;
-  notes?: string; // Novo campo para detalhes adicionais
-}
-
-// --- Restante das interfaces mantidas ---
-
-export enum UserRole {
-  ADMIN = 'Administrador',
-  OPERATOR = 'Operador',
-  VIEWER = 'Visualizador'
-}
-
-export interface SystemUser {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  status: 'Ativo' | 'Inativo' | 'Pendente';
-  lastLogin?: string;
+  notes?: string;
 }
 
 export interface CompanyConfig {
@@ -127,7 +123,6 @@ export interface NfeData {
     finNFe: string;
     indFinal: string;
     indPres: string;
-    indIntermed?: string;
   };
   emit: CompanyConfig;
   dest: {
@@ -157,66 +152,13 @@ export interface NfeData {
     tPag: string;
     vPag: number;
   };
-  infAdic?: string;
-}
-
-export interface NfseNationalData {
-  ref?: string;
-  data_emissao: string;
-  data_competencia: string;
-  codigo_municipio_emissora: number;
-  cnpj_prestador: string;
-  inscricao_municipal_prestador: string;
-  codigo_opcao_simples_nacional: number;
-  regime_especial_tributacao: number;
-  cnpj_tomador: string;
-  razao_social_tomador: string;
-  codigo_municipio_tomador: number;
-  cep_tomador: string;
-  logradouro_tomador: string;
-  numero_tomador: string;
-  complemento_tomador?: string;
-  bairro_tomador: string;
-  telefone_tomador?: string;
-  email_tomador: string;
-  codigo_municipio_prestacao: number;
-  codigo_tributacao_nacional_iss: string;
-  descricao_servico: string;
-  valor_servico: number;
-  tributacao_iss: number;
-  tipo_retencao_iss: number;
-  status?: 'processando_autorizacao' | 'autorizado' | 'cancelado' | 'erro_autorizacao' | 'erro_cancelamento';
-  numero?: string;
-  codigo_verificacao?: string;
-  url?: string;
-  url_danfse?: string;
-  erros?: Array<{ codigo: string, mensagem: string }>;
-}
-
-export interface BillingRecord {
-  id: string;
-  clientId: string;
-  clientName: string;
-  service: ServiceType | string;
-  value: number;
-  status: 'Gerada' | 'Não gerada' | 'Paga' | 'Em atraso';
-  dueDate: string;
-  invoiceUrl?: string;
-}
-
-export interface DashboardMetrics {
-  mrr: number;
-  revenueReceived: number;
-  defaultRate: number;
-  fixedExpenses: number;
-  projectedResult: number;
 }
 
 export interface Receivable {
   id: string;
   clientId: string;
   clientName: string;
-  service: ServiceType | string;
+  service: string;
   description: string;
   dueDate: string;
   value: number;
@@ -235,15 +177,6 @@ export interface Payable {
   paymentMethod: PaymentMethod;
   status: TransactionStatus;
   receiptUrl?: string;
-}
-
-export interface DelinquencyData {
-  clientId: string;
-  clientName: string;
-  totalValue: number;
-  daysLate: number;
-  invoicesCount: number;
-  lastPayment: string;
 }
 
 export interface MonthlyReportData {
@@ -267,17 +200,6 @@ export interface CollectionPlan {
   emailBody: string;
 }
 
-export interface ChatMessage {
-  id: string;
-  sender: 'me' | 'client' | string;
-  content: string;
-  timestamp: string;
-  type: 'text' | 'pdf' | 'image' | string;
-  isRead: boolean;
-  attachmentName?: string;
-  actionRequired?: string;
-}
-
 export interface Conversation {
   id: string;
   clientId: string;
@@ -288,10 +210,8 @@ export interface Conversation {
   lastMessageTime: string;
   status: string;
   isUrgent?: boolean;
-  messages: ChatMessage[];
+  messages: any[];
 }
-
-export type RequestStatus = 'Aberto' | 'Em análise' | 'Concluído' | 'Rejeitado';
 
 export interface ServiceRequest {
   id: string;
@@ -299,8 +219,84 @@ export interface ServiceRequest {
   clientName: string;
   title: string;
   type: string;
-  status: RequestStatus;
+  status: 'Aberto' | 'Em análise' | 'Concluído' | 'Rejeitado';
   priority: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// Added missing types below for application components and services
+
+export interface DashboardMetrics {
+  mrr: number;
+  revenueReceived: number;
+  defaultRate: number;
+  fixedExpenses: number;
+  projectedResult: number;
+}
+
+export interface DelinquencyData {
+  clientId: string;
+  clientName: string;
+  totalValue: number;
+  daysLate: number;
+  invoicesCount: number;
+  lastPayment: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  sender: 'me' | 'client';
+  type: 'text' | 'pdf' | 'image';
+  content?: string;
+  timestamp: string;
+  attachmentName?: string;
+  isRead?: boolean;
+  actionRequired?: string;
+}
+
+export type RequestStatus = 'Aberto' | 'Em análise' | 'Concluído' | 'Rejeitado';
+
+export enum UserRole {
+  ADMIN = 'Administrador',
+  OPERATOR = 'Operador',
+  VIEWER = 'Visualizador'
+}
+
+export interface SystemUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: string;
+  lastLogin?: string;
+}
+
+export interface NfseNationalData {
+  ref?: string;
+  status?: string;
+  numero?: string;
+  codigo_verificacao?: string;
+  url_danfse?: string;
+  data_emissao: string;
+  data_competencia: string;
+  codigo_municipio_emissora: number;
+  cnpj_prestador: string;
+  inscricao_municipal_prestador: string;
+  codigo_opcao_simples_nacional: number;
+  regime_especial_tributacao: number;
+  cnpj_tomador: string;
+  razao_social_tomador: string;
+  codigo_municipio_tomador: number;
+  cep_tomador: string;
+  logradouro_tomador: string;
+  numero_tomador: string;
+  bairro_tomador: string;
+  email_tomador: string;
+  codigo_municipio_prestacao: number;
+  codigo_tributacao_nacional_iss: string;
+  descricao_servico: string;
+  valor_servico: number;
+  tributacao_iss: number;
+  tipo_retencao_iss: number;
 }

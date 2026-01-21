@@ -4,7 +4,7 @@ import {
   Search, Filter, Calendar, CheckCircle, Clock, 
   MoreHorizontal, FileText, Send, DollarSign, X, History,
   MessageCircle, Mail, Loader2, Save, FileUp, Upload, Check, AlertCircle, 
-  Sparkles, Plus, Trash2, RefreshCw
+  Sparkles, Plus, Trash2, RefreshCw, User
 } from 'lucide-react';
 import { MOCK_RECEIVABLES } from '../constants';
 import { TransactionStatus, Receivable, PaymentMethod } from '../types';
@@ -22,6 +22,7 @@ const ReceivablesScreen: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [extractedData, setExtractedData] = useState<ExtractedTransaction[]>([]);
+  const [selectedHistoryClient, setSelectedHistoryClient] = useState<Receivable | null>(null);
 
   // New Receivable State
   const [newReceivable, setNewReceivable] = useState({
@@ -58,6 +59,14 @@ const ReceivablesScreen: React.FC = () => {
       case TransactionStatus.OPEN: return 'bg-blue-100 text-blue-700';
       default: return 'bg-slate-100 text-slate-700';
     }
+  };
+
+  const handleRegisterPayment = (id: string) => {
+    setReceivables(prev => prev.map(item => 
+      item.id === id ? { ...item, status: TransactionStatus.PAID } : item
+    ));
+    setSelectedHistoryClient(null);
+    alert('Pagamento registrado com sucesso!');
   };
 
   const handleAddReceivable = (e: React.FormEvent) => {
@@ -107,10 +116,9 @@ const ReceivablesScreen: React.FC = () => {
       const extension = file.name.split('.').pop()?.toLowerCase();
       let mimeType = file.type;
 
-      // Fallback for missing MIME types (common with .ofx or some PDF exports)
       if (!mimeType) {
         if (extension === 'pdf') mimeType = 'application/pdf';
-        else if (extension === 'ofx') mimeType = 'text/plain'; // We'll handle text-based formats in the service
+        else if (extension === 'ofx') mimeType = 'text/plain';
         else if (['png', 'jpg', 'jpeg', 'webp'].includes(extension || '')) mimeType = `image/${extension === 'jpg' ? 'jpeg' : extension}`;
         else mimeType = 'application/octet-stream';
       }
@@ -225,8 +233,13 @@ const ReceivablesScreen: React.FC = () => {
               {filteredData.map((item) => (
                 <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4">
-                    <div className="font-bold text-slate-900">{item.clientName}</div>
-                    <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{item.service}</div>
+                    <button 
+                      onClick={() => setSelectedHistoryClient(item)}
+                      className="text-left group"
+                    >
+                      <div className="font-bold text-slate-900 group-hover:text-blue-600 transition-colors">{item.clientName}</div>
+                      <div className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">{item.service}</div>
+                    </button>
                   </td>
                   <td className="px-6 py-4 text-sm text-slate-600 font-medium">{item.description}</td>
                   <td className="px-6 py-4 text-sm text-slate-600 font-medium">{new Date(item.dueDate).toLocaleDateString()}</td>
@@ -250,7 +263,7 @@ const ReceivablesScreen: React.FC = () => {
                         className="absolute right-6 top-12 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-2 animate-in fade-in zoom-in-95 duration-100"
                       >
                         <button 
-                          onClick={() => {alert('Registrando pagamento para ' + item.clientName); setOpenMenuId(null)}}
+                          onClick={() => {handleRegisterPayment(item.id); setOpenMenuId(null)}}
                           className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3 font-bold"
                         >
                           <DollarSign size={16} className="text-green-600" /> Registrar Pagamento
@@ -269,7 +282,7 @@ const ReceivablesScreen: React.FC = () => {
                         </button>
                         <div className="h-px bg-slate-100 my-1"></div>
                         <button 
-                          onClick={() => {alert('Abrindo histórico de ' + item.clientName); setOpenMenuId(null)}}
+                          onClick={() => {setSelectedHistoryClient(item); setOpenMenuId(null)}}
                           className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-3 font-medium"
                         >
                           <History size={16} className="text-slate-500" /> Ver Histórico do Cliente
@@ -284,11 +297,98 @@ const ReceivablesScreen: React.FC = () => {
         </div>
       </div>
 
+      {/* MODAL: HISTÓRICO FINANCEIRO */}
+      {selectedHistoryClient && (
+        <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b bg-slate-50 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg"><History size={24} /></div>
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900">Histórico Financeiro</h3>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">{selectedHistoryClient.clientName}</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedHistoryClient(null)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-200 rounded-full transition-colors">
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xl">
+                  {selectedHistoryClient.clientName.charAt(0)}
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900">{selectedHistoryClient.clientName}</h4>
+                  <p className="text-xs text-slate-400 font-mono">CLIENTE ID: {selectedHistoryClient.clientId}</p>
+                </div>
+              </div>
+
+              <div>
+                <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Lançamento Atual</h5>
+                <div className="p-4 border rounded-2xl bg-white shadow-sm space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-slate-600">{selectedHistoryClient.description}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${getStatusColor(selectedHistoryClient.status)}`}>
+                      {selectedHistoryClient.status}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase font-bold">Vencimento</p>
+                      <p className="text-sm font-bold text-slate-700">{new Date(selectedHistoryClient.dueDate).toLocaleDateString()}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] text-slate-400 uppercase font-bold">Valor</p>
+                      <p className="text-xl font-black text-slate-900">R$ {selectedHistoryClient.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Recibos Anteriores (Simulado)</h5>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl text-xs">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle size={14} className="text-green-500" />
+                      <span className="font-bold text-slate-700">Mensalidade Set/24</span>
+                    </div>
+                    <span className="font-black text-slate-900">R$ 3.500,00</span>
+                  </div>
+                  <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl text-xs">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle size={14} className="text-green-500" />
+                      <span className="font-bold text-slate-700">Mensalidade Ago/24</span>
+                    </div>
+                    <span className="font-black text-slate-900">R$ 3.500,00</span>
+                  </div>
+                </div>
+              </div>
+
+              {selectedHistoryClient.status !== TransactionStatus.PAID && (
+                <div className="pt-4 border-t flex flex-col gap-3">
+                  <button 
+                    onClick={() => handleRegisterPayment(selectedHistoryClient.id)}
+                    className="w-full py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 shadow-lg shadow-green-100 flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+                  >
+                    <DollarSign size={20} /> Registrar Pagamento da Fatura
+                  </button>
+                  <p className="text-[10px] text-slate-400 text-center uppercase font-bold tracking-tighter italic">
+                    Ao confirmar, o status será atualizado para "Pago" no fluxo de caixa.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* IMPORT MODAL: IA POWERED */}
       {isImportModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300">
-            
             <input 
               type="file" 
               ref={fileInputRef} 
@@ -296,36 +396,20 @@ const ReceivablesScreen: React.FC = () => {
               className="hidden" 
               accept=".ofx,.pdf,.png,.jpg,.jpeg"
             />
-
             <div className="p-6 border-b flex justify-between items-center bg-slate-50">
               <div className="flex items-center gap-3">
-                <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-100">
-                  <Sparkles size={20} />
-                </div>
+                <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-100"><Sparkles size={20} /></div>
                 <div>
                   <h3 className="font-bold text-slate-900">Importação Inteligente</h3>
                   <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Processamento via Gemini AI</p>
                 </div>
               </div>
-              <button 
-                onClick={() => { 
-                  setIsImportModalOpen(false); 
-                  setExtractedData([]); 
-                  setUploadError(null);
-                }} 
-                className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition-colors"
-              >
-                <X size={20}/>
-              </button>
+              <button onClick={() => { setIsImportModalOpen(false); setExtractedData([]); setUploadError(null); }} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition-colors"><X size={20}/></button>
             </div>
-
             <div className="p-8">
                {!isProcessing && extractedData.length === 0 && !uploadError && (
                  <div className="text-center space-y-4">
-                    <div 
-                      onClick={() => fileInputRef.current?.click()}
-                      className="p-16 border-2 border-dashed border-slate-300 rounded-3xl hover:border-blue-500 hover:bg-blue-50 transition-all group cursor-pointer flex flex-col items-center gap-4"
-                    >
+                    <div onClick={() => fileInputRef.current?.click()} className="p-16 border-2 border-dashed border-slate-300 rounded-3xl hover:border-blue-500 hover:bg-blue-50 transition-all group cursor-pointer flex flex-col items-center gap-4">
                        <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform group-hover:bg-blue-100">
                           <Upload size={32} className="text-slate-400 group-hover:text-blue-600" />
                        </div>
@@ -336,27 +420,16 @@ const ReceivablesScreen: React.FC = () => {
                     </div>
                  </div>
                )}
-
                {uploadError && (
                  <div className="py-12 text-center space-y-6 animate-in fade-in duration-300">
-                    <div className="flex justify-center">
-                      <div className="p-4 bg-red-100 rounded-full text-red-600">
-                        <AlertCircle size={48} />
-                      </div>
-                    </div>
+                    <div className="flex justify-center"><div className="p-4 bg-red-100 rounded-full text-red-600"><AlertCircle size={48} /></div></div>
                     <div className="space-y-2 max-w-sm mx-auto">
                       <h4 className="font-bold text-slate-900 text-lg">Ops! Algo deu errado</h4>
                       <p className="text-sm text-slate-500">{uploadError}</p>
                     </div>
-                    <button 
-                      onClick={() => { setUploadError(null); fileInputRef.current?.click(); }}
-                      className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 flex items-center gap-2 mx-auto transition-all"
-                    >
-                      <RefreshCw size={18} /> Tentar Outro Arquivo
-                    </button>
+                    <button onClick={() => { setUploadError(null); fileInputRef.current?.click(); }} className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 flex items-center gap-2 mx-auto transition-all"><RefreshCw size={18} /> Tentar Outro Arquivo</button>
                  </div>
                )}
-
                {isProcessing && (
                  <div className="py-20 flex flex-col items-center gap-6 animate-pulse">
                     <div className="relative">
@@ -369,25 +442,17 @@ const ReceivablesScreen: React.FC = () => {
                     </div>
                  </div>
                )}
-
                {!isProcessing && extractedData.length > 0 && (
                  <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
                     <div className="flex justify-between items-center">
-                       <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                         <CheckCircle className="text-green-500" size={14} /> {extractedData.length} Lançamentos Encontrados
-                       </h4>
+                       <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><CheckCircle className="text-green-500" size={14} /> {extractedData.length} Lançamentos Encontrados</h4>
                        <button onClick={() => { setExtractedData([]); setUploadError(null); }} className="text-[10px] font-bold text-blue-600 hover:underline uppercase">Trocar Arquivo</button>
                     </div>
-                    
                     <div className="border rounded-2xl overflow-hidden shadow-sm">
                       <div className="max-h-64 overflow-y-auto">
                         <table className="w-full text-left text-xs">
                           <thead className="bg-slate-50 border-b sticky top-0">
-                            <tr>
-                              <th className="px-4 py-3 font-black text-slate-500 uppercase">Cliente</th>
-                              <th className="px-4 py-3 font-black text-slate-500 uppercase">Vencimento</th>
-                              <th className="px-4 py-3 font-black text-slate-500 uppercase text-right">Valor</th>
-                            </tr>
+                            <tr><th className="px-4 py-3 font-black text-slate-500 uppercase">Cliente</th><th className="px-4 py-3 font-black text-slate-500 uppercase">Vencimento</th><th className="px-4 py-3 font-black text-slate-500 uppercase text-right">Valor</th></tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             {extractedData.map((item, idx) => (
@@ -401,20 +466,9 @@ const ReceivablesScreen: React.FC = () => {
                         </table>
                       </div>
                     </div>
-
                     <div className="flex gap-3 pt-4 border-t">
-                      <button 
-                        onClick={() => { setExtractedData([]); setIsImportModalOpen(false); }}
-                        className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                      <button 
-                        onClick={confirmImport}
-                        className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-100 flex items-center justify-center gap-2 active:scale-95 transition-all"
-                      >
-                        <Save size={18} /> Confirmar Importação
-                      </button>
+                      <button onClick={() => { setExtractedData([]); setIsImportModalOpen(false); }} className="flex-1 py-3 text-slate-500 font-bold hover:bg-slate-100 rounded-xl transition-colors">Cancelar</button>
+                      <button onClick={confirmImport} className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-100 flex items-center justify-center gap-2 active:scale-95 transition-all"><Save size={18} /> Confirmar Importação</button>
                     </div>
                  </div>
                )}
@@ -428,30 +482,15 @@ const ReceivablesScreen: React.FC = () => {
         <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col animate-in zoom-in duration-200">
             <div className="p-6 border-b bg-slate-50 flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-600 p-2 rounded-xl text-white"><Plus size={24} /></div>
-                <h3 className="text-xl font-bold text-slate-900">Nova Receita</h3>
-              </div>
+              <div className="flex items-center gap-3"><div className="bg-blue-600 p-2 rounded-xl text-white"><Plus size={24} /></div><h3 className="text-xl font-bold text-slate-900">Nova Receita</h3></div>
               <button onClick={() => setIsAddModalOpen(false)}><X size={24} /></button>
             </div>
             <form onSubmit={handleAddReceivable} className="p-8 space-y-4">
-               <div className="space-y-1">
-                 <label className="text-xs font-bold text-slate-600 uppercase">Cliente</label>
-                 <input required type="text" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500" value={newReceivable.clientName} onChange={e => setNewReceivable({...newReceivable, clientName: e.target.value})} />
-               </div>
-               <div className="space-y-1">
-                 <label className="text-xs font-bold text-slate-600 uppercase">Descrição</label>
-                 <input required type="text" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500" value={newReceivable.description} onChange={e => setNewReceivable({...newReceivable, description: e.target.value})} />
-               </div>
+               <div className="space-y-1"><label className="text-xs font-bold text-slate-600 uppercase">Cliente</label><input required type="text" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500" value={newReceivable.clientName} onChange={e => setNewReceivable({...newReceivable, clientName: e.target.value})} /></div>
+               <div className="space-y-1"><label className="text-xs font-bold text-slate-600 uppercase">Descrição</label><input required type="text" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500" value={newReceivable.description} onChange={e => setNewReceivable({...newReceivable, description: e.target.value})} /></div>
                <div className="grid grid-cols-2 gap-4">
-                 <div className="space-y-1">
-                   <label className="text-xs font-bold text-slate-600 uppercase">Vencimento</label>
-                   <input required type="date" className="w-full p-2.5 border rounded-lg" value={newReceivable.dueDate} onChange={e => setNewReceivable({...newReceivable, dueDate: e.target.value})} />
-                 </div>
-                 <div className="space-y-1">
-                   <label className="text-xs font-bold text-slate-600 uppercase">Valor (R$)</label>
-                   <input required type="number" step="0.01" className="w-full p-2.5 border rounded-lg font-black text-blue-600" value={newReceivable.value} onChange={e => setNewReceivable({...newReceivable, value: parseFloat(e.target.value)})} />
-                 </div>
+                 <div className="space-y-1"><label className="text-xs font-bold text-slate-600 uppercase">Vencimento</label><input required type="date" className="w-full p-2.5 border rounded-lg" value={newReceivable.dueDate} onChange={e => setNewReceivable({...newReceivable, dueDate: e.target.value})} /></div>
+                 <div className="space-y-1"><label className="text-xs font-bold text-slate-600 uppercase">Valor (R$)</label><input required type="number" step="0.01" className="w-full p-2.5 border rounded-lg font-black text-blue-600" value={newReceivable.value} onChange={e => setNewReceivable({...newReceivable, value: parseFloat(e.target.value)})} /></div>
                </div>
                <div className="pt-6 flex justify-end gap-3 border-t">
                   <button type="button" onClick={() => setIsAddModalOpen(false)} className="px-6 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-xl">Cancelar</button>

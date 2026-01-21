@@ -9,13 +9,71 @@ export interface ExtractedTransaction {
   description: string;
   value: number;
   type: 'entrada' | 'saida';
-  entity?: string; // Cliente ou Fornecedor
+  entity?: string;
+  installments?: Array<{ dueDate: string; value: number }>;
+  products?: Array<{ name: string; quantity: number; unitPrice: number; ncm: string }>;
 }
 
 /**
- * Processa qualquer documento financeiro (PDF, Imagem, Planilha base64) 
- * para extrair contas a pagar ou a receber.
+ * Analisa XML de NF-e para extrair produtos (Estoque) e parcelas (Contas a Pagar).
  */
+export const parseNfeXml = async (xmlContent: string): Promise<ExtractedTransaction | null> => {
+  try {
+    const prompt = `
+      Você é um motor de leitura fiscal. Analise o XML da NF-e abaixo e extraia:
+      1. entity: Razão Social do Emitente (Fornecedor)
+      2. products: Lista de produtos com (name, quantity, unitPrice, ncm)
+      3. installments: Lista de parcelas de pagamento se houver nas tags <fat> ou <dup> (dueDate, value)
+      4. value: Valor total da nota.
+
+      XML CONTENT:
+      ${xmlContent.substring(0, 10000)} // Limite para evitar estouro de token
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            entity: { type: Type.STRING },
+            value: { type: Type.NUMBER },
+            products: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  quantity: { type: Type.NUMBER },
+                  unitPrice: { type: Type.NUMBER },
+                  ncm: { type: Type.STRING }
+                }
+              }
+            },
+            installments: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  dueDate: { type: Type.STRING },
+                  value: { type: Type.NUMBER }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+
+    return JSON.parse(response.text || "null");
+  } catch (error) {
+    console.error("Erro ao processar XML:", error);
+    return null;
+  }
+};
+
 export const processFinancialDocument = async (
   base64Data: string, 
   mimeType: string, 
@@ -23,47 +81,19 @@ export const processFinancialDocument = async (
 ): Promise<ExtractedTransaction[]> => {
   const modelName = 'gemini-3-flash-preview';
 
-  const contextText = context === 'payable' 
-    ? "Contas a Pagar (identifique Fornecedores, Datas de Vencimento e Valores de Saída)" 
-    : "Contas a Receber (identifique Clientes, Datas de Vencimento e Valores de Entrada)";
-
   try {
     const prompt = `
-      Atue como um especialista em BPO Financeiro. Analise este conteúdo que contém um relatório ou extrato de ${contextText}.
-      O conteúdo pode ser um PDF, imagem ou texto de extrato (como OFX).
-      
-      Extraia rigorosamente:
-      1. date: Data de vencimento ou transação (formato YYYY-MM-DD)
-      2. description: Descrição do serviço, produto ou transação
-      3. value: Valor monetário (número positivo)
-      4. entity: Nome do Cliente (se for receber) ou Fornecedor (se for pagar/extrato)
-      5. type: 'entrada' para recebíveis/depósitos ou 'saida' para pagáveis/débitos
-
-      Retorne estritamente um array JSON de objetos. Se não encontrar dados claros, retorne um array vazio [].
+      Extraia dados financeiros deste ${mimeType === 'text/plain' ? 'XML/Texto' : 'Documento'}.
+      Identifique data, descrição, valor e entidade.
     `;
 
-    // Detect if we should use inlineData (images/pdf) or text (csv/ofx/txt)
-    const supportedBinaryTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif'];
-    const isBinary = supportedBinaryTypes.includes(mimeType);
-
     let parts: any[] = [{ text: prompt }];
-
-    if (isBinary) {
-      parts.push({
-        inlineData: {
-          data: base64Data,
-          mimeType: mimeType
-        }
-      });
+    const supportedBinaryTypes = ['application/pdf', 'image/png', 'image/jpeg'];
+    
+    if (supportedBinaryTypes.includes(mimeType)) {
+      parts.push({ inlineData: { data: base64Data, mimeType } });
     } else {
-      // If it's text-based (like OFX), we decode the base64 and send it as text
-      try {
-        const decodedText = atob(base64Data);
-        parts.push({ text: `CONTEÚDO DO ARQUIVO:\n${decodedText}` });
-      } catch (e) {
-        // Fallback: send it as is if decoding fails (though it should be base64)
-        parts.push({ text: `DADOS DO ARQUIVO (BASE64):\n${base64Data}` });
-      }
+      parts.push({ text: atob(base64Data) });
     }
 
     const response = await ai.models.generateContent({
@@ -80,127 +110,46 @@ export const processFinancialDocument = async (
               description: { type: Type.STRING },
               value: { type: Type.NUMBER },
               entity: { type: Type.STRING },
-              type: { type: Type.STRING, enum: ['entrada', 'saida'] }
-            },
-            required: ['date', 'description', 'value', 'entity', 'type']
+              type: { type: Type.STRING }
+            }
           }
         }
       }
     });
 
-    return JSON.parse(response.text || "[]") as ExtractedTransaction[];
+    return JSON.parse(response.text || "[]");
   } catch (error) {
-    console.error("Erro ao processar documento financeiro:", error);
     return [];
   }
 };
 
-// Funções anteriores mantidas para compatibilidade
-export const processStatementFile = async (base64Data: string, mimeType: string): Promise<ExtractedTransaction[]> => {
-  return processFinancialDocument(base64Data, mimeType, 'receivable');
-};
-
 export const generateFinancialReport = async (contextData: string): Promise<string> => {
-  const modelName = 'gemini-3-flash-preview';
   try {
-    const prompt = `Analise os dados e forneça um resumo executivo: ${contextData}`;
-    const response = await ai.models.generateContent({ model: modelName, contents: prompt });
+    const response = await ai.models.generateContent({ 
+      model: 'gemini-3-flash-preview', 
+      contents: `Gere um resumo executivo: ${contextData}` 
+    });
     return response.text || "";
-  } catch (error) { return "Erro na IA."; }
+  } catch (error) { return "Erro."; }
 };
 
-export const generateCollectionPlan = async (clientName: string, debtData: DelinquencyData, toneOverride?: 'friendly' | 'firm' | 'legal'): Promise<CollectionPlan | null> => {
-  const modelName = 'gemini-3-flash-preview';
+export const generateMeetingReport = async (clientName: string, month: string, summaryData: any): Promise<MonthlyReportData | null> => {
   try {
-    const prompt = `Gere plano de cobrança para ${clientName}. Tom: ${toneOverride}. Dados da dívida: ${JSON.stringify(debtData)}. 
-    Retorne um JSON com as chaves: analysis, whatsappMessage, emailSubject, emailBody.`;
     const response = await ai.models.generateContent({ 
-      model: modelName, 
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            analysis: { type: Type.STRING },
-            whatsappMessage: { type: Type.STRING },
-            emailSubject: { type: Type.STRING },
-            emailBody: { type: Type.STRING }
-          },
-          required: ['analysis', 'whatsappMessage', 'emailSubject', 'emailBody']
-        }
-      }
+      model: 'gemini-3-flash-preview', 
+      contents: `Gere relatório: ${JSON.stringify(summaryData)}`,
+      config: { responseMimeType: 'application/json' }
     });
     return JSON.parse(response.text || "{}");
   } catch (error) { return null; }
 };
 
-export const generateMeetingReport = async (clientName: string, month: string, summaryData: any): Promise<MonthlyReportData | null> => {
-  const modelName = 'gemini-3-flash-preview';
+export const generateCollectionPlan = async (clientName: string, debtData: DelinquencyData, toneOverride?: string): Promise<CollectionPlan | null> => {
   try {
-    const prompt = `Gere relatório mensal para ${clientName} ref ${month}. Dados: ${JSON.stringify(summaryData)}`;
     const response = await ai.models.generateContent({ 
-      model: modelName, 
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            summary: {
-              type: Type.OBJECT,
-              properties: {
-                revenue: { type: Type.NUMBER },
-                expenses: { type: Type.NUMBER },
-                result: { type: Type.NUMBER },
-                delinquencyRate: { type: Type.NUMBER },
-                aiComment: { type: Type.STRING }
-              }
-            },
-            revenueByService: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  value: { type: Type.NUMBER }
-                }
-              }
-            },
-            expensesByCostCenter: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  value: { type: Type.NUMBER }
-                }
-              }
-            },
-            topClients: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  value: { type: Type.NUMBER },
-                  percent: { type: Type.NUMBER }
-                }
-              }
-            },
-            alerts: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  type: { type: Type.STRING },
-                  message: { type: Type.STRING }
-                }
-              }
-            }
-          }
-        }
-      }
+      model: 'gemini-3-flash-preview', 
+      contents: `Plano de cobrança para ${clientName}`,
+      config: { responseMimeType: 'application/json' }
     });
     return JSON.parse(response.text || "{}");
   } catch (error) { return null; }
