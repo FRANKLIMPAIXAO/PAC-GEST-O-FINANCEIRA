@@ -29,32 +29,46 @@ export const processFinancialDocument = async (
 
   try {
     const prompt = `
-      Atue como um especialista em BPO Financeiro. Analise este documento que contém um relatório de ${contextText}.
-      O documento pode vir de sistemas como Omie, Conta Azul, RD Station ou planilhas customizadas.
+      Atue como um especialista em BPO Financeiro. Analise este conteúdo que contém um relatório ou extrato de ${contextText}.
+      O conteúdo pode ser um PDF, imagem ou texto de extrato (como OFX).
       
       Extraia rigorosamente:
-      1. date: Data de vencimento (formato YYYY-MM-DD)
-      2. description: Descrição do serviço ou produto
+      1. date: Data de vencimento ou transação (formato YYYY-MM-DD)
+      2. description: Descrição do serviço, produto ou transação
       3. value: Valor monetário (número positivo)
-      4. entity: Nome do Cliente (se for receber) ou Fornecedor (se for pagar)
-      5. type: 'entrada' para recebíveis ou 'saida' para pagáveis
+      4. entity: Nome do Cliente (se for receber) ou Fornecedor (se for pagar/extrato)
+      5. type: 'entrada' para recebíveis/depósitos ou 'saida' para pagáveis/débitos
 
       Retorne estritamente um array JSON de objetos. Se não encontrar dados claros, retorne um array vazio [].
     `;
 
+    // Detect if we should use inlineData (images/pdf) or text (csv/ofx/txt)
+    const supportedBinaryTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif'];
+    const isBinary = supportedBinaryTypes.includes(mimeType);
+
+    let parts: any[] = [{ text: prompt }];
+
+    if (isBinary) {
+      parts.push({
+        inlineData: {
+          data: base64Data,
+          mimeType: mimeType
+        }
+      });
+    } else {
+      // If it's text-based (like OFX), we decode the base64 and send it as text
+      try {
+        const decodedText = atob(base64Data);
+        parts.push({ text: `CONTEÚDO DO ARQUIVO:\n${decodedText}` });
+      } catch (e) {
+        // Fallback: send it as is if decoding fails (though it should be base64)
+        parts.push({ text: `DADOS DO ARQUIVO (BASE64):\n${base64Data}` });
+      }
+    }
+
     const response = await ai.models.generateContent({
       model: modelName,
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              data: base64Data,
-              mimeType: mimeType
-            }
-          },
-          { text: prompt }
-        ]
-      },
+      contents: { parts },
       config: {
         responseMimeType: 'application/json',
         responseSchema: {
